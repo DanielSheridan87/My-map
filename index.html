@@ -11,7 +11,7 @@
     <style>
         body { margin: 0; padding: 0; font-family: Arial, sans-serif; display: flex; flex-direction: row; }
         
-        /* Left Control Panel */
+        /* Control Panel Layout */
         #panel { 
             width: 360px; 
             height: 100vh; 
@@ -25,7 +25,7 @@
             overflow-y: auto;
         }
         
-        /* Map Panel */
+        /* Map Panel Layout */
         #map { flex-grow: 1; height: 100vh; width: 100%; }
         
         textarea { 
@@ -61,7 +61,7 @@
         label { font-weight: bold; margin-bottom: 5px; display: block; }
         .instructions { font-size: 13px; color: #555; margin-bottom: 15px; line-height: 1.4; background: #e9ecef; padding: 10px; border-radius: 4px; }
 
-        /* MOBILE FIX: Stacks the text entry on top and puts the map directly below it */
+        /* Mobile Optimization */
         @media (max-width: 768px) {
             body { flex-direction: column; }
             #panel { width: 100%; height: auto; min-height: 40vh; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
@@ -109,7 +109,7 @@
         // Layer group to hold map markers
         var markerLayer = L.layerGroup().addTo(map);
 
-        // 3. Pin Color Options: red, blue, green, orange, yellow, violet, black, grey
+        // 3. Pin Customization Configuration
         function getIcon(colorName) {
             const validColor = colorName.trim().toLowerCase() || 'blue';
             return new L.Icon({
@@ -139,9 +139,7 @@
             localStorage.setItem('savedPostcodes', rawText); // Save to browser memory
             
             const lines = rawText.split('\n');
-            let bounds = []; // Track points to zoom into later
-
-            // Track pending API requests
+            let bounds = []; 
             let fetchPromises = [];
 
             lines.forEach(line => {
