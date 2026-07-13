@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <title>Quick Postcode Mapper</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <!-- Load Leaflet Map CSS -->
+    <link rel="stylesheet" href="https://unpkg.com" />
+    
+    <style>
+        body { margin: 0; padding: 0; font-family: Arial, sans-serif; display: flex; }
+        
+        /* Left Control Panel */
+        #panel { 
+            width: 360px; 
+            height: 100vh; 
+            padding: 20px; 
+            box-sizing: border-box; 
+            background: #f8f9fa; 
+            box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        /* Map Panel */
+        #map { flex-grow: 1; height: 100vh; }
+        
+        textarea { 
+            width: 100%; 
+            height: 300px; 
+            margin-bottom: 15px; 
+            box-sizing: border-box;
+            padding: 10px;
+            font-family: monospace;
+            font-size: 13px;
+            resize: none;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        
+        button { 
+            width: 100%; 
+            padding: 12px; 
+            background: #007bff; 
+            color: white; 
+            border: none; 
+            border-radius: 4px; 
+            cursor: pointer; 
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        button:hover { background: #0056b3; }
+        
+        .clear-btn { background: #dc3545; }
+        .clear-btn:hover { background: #bd2130; }
+        
+        label { font-weight: bold; margin-bottom: 5px; display: block; }
+        .instructions { font-size: 13px; color: #555; margin-bottom: 15px; line-height: 1.4; background: #e9ecef; padding: 10px; border-radius: 4px; }
+    </style>
+</head>
+<body>
+
+    <!-- Control Panel -->
+    <div id="panel">
+        <h2>Postcode Plotter</h2>
+        <div class="instructions">
+            Paste your data below. Format each line as:<br>
+            <strong>Postcode, Label, Color</strong><br><br>
+            <em>Example:</em><br>
+            SW1A 1AA, Route 1, red<br>
+            M16 0RA, Route 2, blue<br>
+            EH1 1RE, New Stop, green
+        </div>
+        
+        <label for="dataInput">Paste Postcodes:</label>
+        <textarea id="dataInput" placeholder="SW1A 1AA, Route 1, red&#10;M16 0RA, Route 2, blue"></textarea>
+        
+        <button onclick="plotPostcodes()">Plot on Map</button>
+        <button class="clear-btn" onclick="clearAll()">Clear Map & Text</button>
+    </div>
+
+    <!-- The Map Viewport -->
+    <div id="map"></div>
+
+    <!-- Load Leaflet Map Library -->
+    <script src="https://unpkg.com"></script>
+
+    <script>
+        // 1. Initialize Map centered on the UK
+        var map = L.map('map').setView([54.5, -4], 6);
+        
+        // 2. Add Map Tiles (OpenStreetMap)
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '© OpenStreetMap'
+        }).addTo(map);
+
+        // Layer group to hold map markers
+        var markerLayer = L.layerGroup().addTo(map);
+
+        // 3. Pin Color Options: red, blue, green, orange, yellow, violet, black, grey
+        function getIcon(colorName) {
+            const validColor = colorName.trim().toLowerCase() || 'blue';
+            return new L.Icon({
+                iconUrl: `https://githubusercontent.com{validColor}.png`,
+                shadowUrl: 'https://cloudflare.com',
+                iconSize:,
+                iconAnchor:,
+                popupAnchor: [1, -34],
+                shadowSize: [41, 41]
+            });
+        }
+
+        // 4. Load saved data on startup if it exists
+        window.onload = function() {
+            const savedData = localStorage.getItem('savedPostcodes');
+            if (savedData) {
+                document.getElementById('dataInput').value = savedData;
+                plotPostcodes();
+            }
+        };
+
+        // 5. Parse text box and fetch coordinates
+        function plotPostcodes() {
+            markerLayer.clearLayers(); // Clear old pins
+            
+            const rawText = document.getElementById('dataInput').value;
+            localStorage.setItem('savedPostcodes', rawText); // Save to browser memory
+            
+            const lines = rawText.split('\n');
+
+            lines.forEach(line => {
+                if (!line.trim()) return; 
+
+                // Split line by commas
+                const parts = line.split(',');
+                const postcode = parts[0] ? parts[0].trim() : '';
+                const label = parts[1] ? parts[1].trim() : 'No Label';
+                const color = parts[2] ? parts[2].trim() : 'blue';
+
+                if (postcode) {
+                    // Fetch latitude/longitude from free public API
+                    fetch(`https://postcodes.io{encodeURIComponent(postcode)}`)
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.status === 200) {
+                                const lat = data.result.latitude;
+                                const lon = data.result.longitude;
+                                
+                                // Create the pin
+                                L.marker([lat, lon], {icon: getIcon(color)})
+                                    .bindPopup(`<b>${label}</b><br>${postcode.toUpperCase()}`)
+                                    .addTo(markerLayer);
+                            }
+                        })
+                        .catch(err => console.error('Error fetching postcode:', postcode));
+                }
+            });
+        }
+
+        // 6. Reset function
+        function clearAll() {
+            document.getElementById('dataInput').value = '';
+            localStorage.removeItem('savedPostcodes');
+            markerLayer.clearLayers();
+        }
+    </script>
+</body>
+</html>
