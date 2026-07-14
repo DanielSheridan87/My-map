@@ -1,193 +1,138 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="utf-8" />
-    <title>Quick Postcode Mapper</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    
-    <!-- Load Leaflet Map CSS -->
-    <link rel="stylesheet" href="https://unpkg.com" />
-    
-    <style>
-        body { margin: 0; padding: 0; font-family: Arial, sans-serif; display: flex; flex-direction: row; }
-        
-        /* Control Panel Layout */
-        #panel { 
-            width: 360px; 
-            height: 100vh; 
-            padding: 20px; 
-            box-sizing: border-box; 
-            background: #f8f9fa; 
-            box-shadow: 2px 0 5px rgba(0,0,0,0.1);
-            z-index: 1000;
-            display: flex;
-            flex-direction: column;
-            overflow-y: auto;
-        }
-        
-        /* Map Panel Layout */
-        #map { flex-grow: 1; height: 100vh; width: 100%; }
-        
-        textarea { 
-            width: 100%; 
-            height: 200px; 
-            margin-bottom: 15px; 
-            box-sizing: border-box;
-            padding: 10px;
-            font-family: monospace;
-            font-size: 13px;
-            resize: none;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-        }
-        
-        button { 
-            width: 100%; 
-            padding: 12px; 
-            background: #007bff; 
-            color: white; 
-            border: none; 
-            border-radius: 4px; 
-            cursor: pointer; 
-            font-size: 16px;
-            font-weight: bold;
-            margin-bottom: 10px;
-            flex-shrink: 0;
-        }
-        button:hover { background: #0056b3; }
-        .clear-btn { background: #dc3545; }
-        .clear-btn:hover { background: #bd2130; }
-        
-        label { font-weight: bold; margin-bottom: 5px; display: block; }
-        .instructions { font-size: 13px; color: #555; margin-bottom: 15px; line-height: 1.4; background: #e9ecef; padding: 10px; border-radius: 4px; }
-
-        /* Mobile Optimization */
-        @media (max-width: 768px) {
-            body { flex-direction: column; }
-            #panel { width: 100%; height: auto; min-height: 40vh; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-            #map { height: 60vh; width: 100%; }
-        }
-    </style>
+  <title>Postcode Route Mapper</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f9; }
+    h2 { margin-top: 0; }
+    #container { display: flex; gap: 20px; flex-wrap: wrap; }
+    #input-area { width: 100%; max-width: 300px; }
+    textarea { 
+      width: 100%; 
+      height: 400px; 
+      padding: 10px; 
+      font-family: monospace; 
+      border: 1px solid #ccc; 
+      border-radius: 4px;
+    }
+    button { 
+      width: 100%; 
+      padding: 10px; 
+      margin-top: 10px; 
+      background-color: #007bff; 
+      color: white; 
+      border: none; 
+      border-radius: 4px; 
+      cursor: pointer; 
+      font-weight: bold;
+    }
+    button:hover { background-color: #0056b3; }
+    #map { height: 600px; flex-grow: 1; min-width: 400px; border: 2px solid #ccc; border-radius: 4px; }
+    .help-text { font-size: 0.9em; color: #555; }
+  </style>
 </head>
 <body>
 
-    <!-- Control Panel -->
-    <div id="panel">
-        <h2>Postcode Plotter</h2>
-        <div class="instructions">
-            Paste your data below. Format each line as:<br>
-            <strong>Postcode, Label, Color</strong><br><br>
-            <em>Example:</em><br>
-            SW1A 1AA, Route 1, red<br>
-            M16 0RA, Route 2, blue<br>
-            EH1 1RE, New Stop, green
-        </div>
-        
-        <label for="dataInput">Paste Postcodes:</label>
-        <textarea id="dataInput" placeholder="SW1A 1AA, Route 1, red&#10;M16 0RA, Route 2, blue"></textarea>
-        
-        <button onclick="plotPostcodes()">Plot on Map</button>
-        <button class="clear-btn" onclick="clearAll()">Clear Map & Text</button>
+  <h2>Custom Postcode Mapper</h2>
+  <div id="container">
+    <div id="input-area">
+      <p class="help-text">Paste postcodes and colours line by line.<br>Format: <b>postcode,colour</b></p>
+      <textarea id="dataInput">bh12 4bz,blue&#10;BH12 4LL,black&#10;BH1 1AA,red</textarea>
+      <button onclick="plotMap()">Plot on Map</button>
     </div>
-
-    <!-- The Map Viewport -->
     <div id="map"></div>
+  </div>
 
-    <!-- Load Leaflet Map Library -->
-    <script src="https://unpkg.com"></script>
+  <script>
+    // 1. Initialize the map (starts centered near Poole/Bournemouth)
+    const map = L.map('map').setView([50.73, -1.98], 11);
+    
+    // 2. Load the free OpenStreetMap tiles
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '© OpenStreetMap'
+    }).addTo(map);
 
-    <script>
-        // 1. Initialize Map centered on the UK
-        var map = L.map('map').setView([54.5, -4], 6);
+    // Create a layer group to hold our pins so we can easily clear them
+    let markers = L.layerGroup().addTo(map);
+
+    async function plotMap() {
+      markers.clearLayers(); // Clear map on new button click
+      
+      const rawText = document.getElementById('dataInput').value;
+      const lines = rawText.split('\n');
+      const dataPoints = [];
+      const postcodesToLookup = [];
+
+      // 3. Read the text box line by line
+      for (let line of lines) {
+        line = line.trim();
+        if (!line) continue;
         
-        // 2. Add Map Tiles (OpenStreetMap)
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            maxZoom: 19,
-            attribution: '© OpenStreetMap'
-        }).addTo(map);
-
-        // Layer group to hold map markers
-        var markerLayer = L.layerGroup().addTo(map);
-
-        // 3. Pin Customization Configuration
-        function getIcon(colorName) {
-            const validColor = colorName.trim().toLowerCase() || 'blue';
-            return new L.Icon({
-                iconUrl: `https://githubusercontent.com{validColor}.png`,
-                shadowUrl: 'https://cloudflare.com',
-                iconSize:,
-                iconAnchor:,
-                popupAnchor: [1, -34],
-                shadowSize: [41, 41]
-            });
+        const parts = line.split(',');
+        if (parts.length >= 2) {
+          const postcode = parts[0].trim();
+          const color = parts[1].trim();
+          dataPoints.push({ postcode, color });
+          postcodesToLookup.push(postcode);
         }
+      }
 
-        // 4. Load saved data on startup if it exists
-        window.onload = function() {
-            const savedData = localStorage.getItem('savedPostcodes');
-            if (savedData) {
-                document.getElementById('dataInput').value = savedData;
-                plotPostcodes();
+      if (postcodesToLookup.length === 0) return alert('No valid data found! Ensure format is postcode,colour');
+
+      // 4. Send bulk request to Postcodes.io
+      try {
+        const response = await fetch('https://api.postcodes.io/postcodes', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ postcodes: postcodesToLookup })
+        });
+        const apiData = await response.json();
+
+        let validCount = 0;
+
+        // 5. Match the API coordinates back to your custom colours
+        apiData.result.forEach(item => {
+          if (item.result) { // If postcode is valid
+            const lat = item.result.latitude;
+            const lng = item.result.longitude;
+            const queryPc = item.query;
+
+            // Find the colour assigned to this postcode (ignoring spaces and capitals)
+            const match = dataPoints.find(dp => 
+              dp.postcode.replace(/\s+/g, '').toLowerCase() === queryPc.replace(/\s+/g, '').toLowerCase()
+            );
+
+            if (match) {
+              // Plot a coloured circle marker
+              L.circleMarker([lat, lng], {
+                radius: 10,
+                fillColor: match.color,
+                color: '#000', // Black outline
+                weight: 2,
+                fillOpacity: 1
+              }).bindPopup(`<b>${item.result.postcode}</b>`).addTo(markers);
+              validCount++;
             }
-        };
+          }
+        });
 
-        // 5. Parse text box and fetch coordinates
-        function plotPostcodes() {
-            markerLayer.clearLayers(); // Clear old pins
-            
-            const rawText = document.getElementById('dataInput').value;
-            localStorage.setItem('savedPostcodes', rawText); // Save to browser memory
-            
-            const lines = rawText.split('\n');
-            let bounds = []; 
-            let fetchPromises = [];
-
-            lines.forEach(line => {
-                if (!line.trim()) return; 
-
-                // Split line by commas
-                const parts = line.split(',');
-                const postcode = parts[0] ? parts[0].trim() : '';
-                const label = parts[1] ? parts[1].trim() : 'No Label';
-                const color = parts[2] ? parts[2].trim() : 'blue';
-
-                if (postcode) {
-                    // Fetch latitude/longitude from free public API
-                    const promise = fetch(`https://postcodes.io{encodeURIComponent(postcode)}`)
-                        .then(response => response.json())
-                        .then(data => {
-                            if (data.status === 200) {
-                                const lat = data.result.latitude;
-                                const lon = data.result.longitude;
-                                bounds.push([lat, lon]);
-                                
-                                // Create the pin
-                                L.marker([lat, lon], {icon: getIcon(color)})
-                                    .bindPopup(`<b>${label}</b><br>${postcode.toUpperCase()}`)
-                                    .addTo(markerLayer);
-                            }
-                        })
-                        .catch(err => console.error('Error fetching postcode:', postcode));
-                    
-                    fetchPromises.push(promise);
-                }
-            });
-
-            // Once all postcodes have finished loading, fit the map zoom view perfectly
-            Promise.all(fetchPromises).then(() => {
-                if (bounds.length > 0) {
-                    map.fitBounds(bounds, { padding: [50, 50] });
-                }
-            });
+        // 6. Adjust the map zoom to fit all the new pins perfectly
+        if (validCount > 0) {
+          const group = new L.featureGroup(markers.getLayers());
+          map.fitBounds(group.getBounds().pad(0.1));
+        } else {
+          alert("Could not find coordinates. Please check your postcodes.");
         }
 
-        // 6. Reset function
-        function clearAll() {
-            document.getElementById('dataInput').value = '';
-            localStorage.removeItem('savedPostcodes');
-            markerLayer.clearLayers();
-            map.setView([54.5, -4], 6); // Reset zoom to UK overview
-        }
-    </script>
+      } catch (error) {
+        console.error(error);
+        alert('There was an error communicating with the Postcode server.');
+      }
+    }
+  </script>
 </body>
 </html>
