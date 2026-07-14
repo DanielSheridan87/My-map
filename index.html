@@ -33,9 +33,17 @@
       font-weight: bold;
     }
     button:hover { background-color: #0056b3; }
-    /* z-index ensures the map stays on top when full screen is triggered */
     #map { height: 600px; flex-grow: 1; min-width: 400px; border: 2px solid #ccc; border-radius: 4px; z-index: 1; }
     .help-text { font-size: 0.9em; color: #555; }
+    
+    /* Slight styling to make the always-on label look clean */
+    .custom-label {
+      background: rgba(255, 255, 255, 0.9);
+      border: 1px solid #999;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+      font-size: 12px;
+      padding: 4px 6px;
+    }
   </style>
 </head>
 <body>
@@ -51,7 +59,7 @@
   </div>
 
   <script>
-    // 1. Initialize the map WITH the fullscreen control enabled
+    // 1. Initialize the map with fullscreen enabled
     const map = L.map('map', {
       fullscreenControl: true,
       fullscreenControlOptions: { position: 'topleft' }
@@ -73,7 +81,7 @@
       const dataPoints = [];
       const postcodesToLookup = [];
 
-      // 3. Read the text box expecting up to 3 parts (postcode, colour, name)
+      // 3. Read the text box
       for (let line of lines) {
         line = line.trim();
         if (!line) continue;
@@ -82,9 +90,7 @@
         if (parts.length >= 2) {
           const postcode = parts[0].trim();
           const color = parts[1].trim();
-          
-          // If a name is provided, grab it. Otherwise, say "No Name provided"
-          const name = parts[2] ? parts[2].trim() : 'No Name provided';
+          const name = parts[2] ? parts[2].trim() : 'No Name';
           
           dataPoints.push({ postcode, color, name });
           postcodesToLookup.push(postcode);
@@ -104,7 +110,7 @@
 
         let validCount = 0;
 
-        // 5. Match coordinates to custom colours and names
+        // 5. Match coordinates and plot the pins with permanent labels
         apiData.result.forEach(item => {
           if (item.result) { 
             const lat = item.result.latitude;
@@ -116,14 +122,23 @@
             );
 
             if (match) {
-              // Plot marker with the new popup format showing Name on top, Postcode underneath
-              L.circleMarker([lat, lng], {
-                radius: 10,
+              // RADIUS changed to 6 to make the dot smaller
+              const marker = L.circleMarker([lat, lng], {
+                radius: 6,
                 fillColor: match.color,
-                color: '#000', 
-                weight: 2,
+                color: '#000', // Black border
+                weight: 1.5,   // Slightly thinner border to match smaller dot
                 fillOpacity: 1
-              }).bindPopup(`<b>${match.name}</b><br>${item.result.postcode}`).addTo(markers);
+              }).addTo(markers);
+
+              // TOOLTIP added to make the label always visible next to the dot
+              marker.bindTooltip(`<b>${match.name}</b><br>${item.result.postcode}`, {
+                permanent: true,       // Keeps it visible without clicking/hovering
+                direction: 'right',    // Places the label to the right of the dot
+                offset: [5, 0],        // Pushes the label 5 pixels away so it doesn't overlap the dot
+                className: 'custom-label' // Uses the clean CSS styling from above
+              });
+
               validCount++;
             }
           }
