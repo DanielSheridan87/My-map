@@ -122,21 +122,20 @@
             );
 
             if (match) {
-              // RADIUS changed to 6 to make the dot smaller
               const marker = L.circleMarker([lat, lng], {
                 radius: 6,
                 fillColor: match.color,
-                color: '#000', // Black border
-                weight: 1.5,   // Slightly thinner border to match smaller dot
+                color: '#000', 
+                weight: 1.5,   
                 fillOpacity: 1
               }).addTo(markers);
 
-              // TOOLTIP added to make the label always visible next to the dot
-              marker.bindTooltip(`<b>${match.name}</b><br>${item.result.postcode}`, {
-                permanent: true,       // Keeps it visible without clicking/hovering
-                direction: 'right',    // Places the label to the right of the dot
-                offset: [5, 0],        // Pushes the label 5 pixels away so it doesn't overlap the dot
-                className: 'custom-label' // Uses the clean CSS styling from above
+              // TOOLTIP UPDATED: Removed the <br> and postcode section
+              marker.bindTooltip(`<b>${match.name}</b>`, {
+                permanent: true,       
+                direction: 'right',    
+                offset: [5, 0],        
+                className: 'custom-label' 
               });
 
               validCount++;
