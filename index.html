@@ -12,23 +12,20 @@
     body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f9; }
     h2 { margin-top: 0; }
     
-    /* Changed container to stack items vertically */
     #container { display: flex; flex-direction: column; gap: 20px; }
     
-    /* Map now takes up 100% of the width */
     #map { width: 100%; height: 600px; border: 2px solid #ccc; border-radius: 4px; z-index: 1; }
     
-    /* Input area sits below and spans the full width */
     #input-area { width: 100%; }
     
     textarea { 
       width: 100%; 
-      height: 300px; /* Slightly shorter to fit on the screen nicely */
+      height: 300px; 
       padding: 10px; 
       font-family: monospace; 
       border: 1px solid #ccc; 
       border-radius: 4px;
-      box-sizing: border-box; /* Stops padding from pushing the box off the screen */
+      box-sizing: border-box; 
     }
     button.plot-btn { 
       width: 100%; 
@@ -54,7 +51,6 @@
       padding: 4px 6px;
     }
 
-    /* CSS Full-Screen Trick */
     .fullscreen-map-mode {
       position: fixed !important;
       top: 0 !important;
@@ -79,24 +75,21 @@
     <div id="map"></div>
     
     <div id="input-area">
-      <p class="help-text">Paste postcodes, colours, and names line by line.<br>Format: <b>postcode,colour,name</b></p>
-      <textarea id="dataInput">bh12 4bz,blue,Test&#10;BH12 4LL,black,Test&#10;BH1 1AA,red,Test</textarea>
+      <p class="help-text">Paste data line by line.<br>Formats accepted: <b>postcode</b> OR <b>postcode,colour</b> OR <b>postcode,colour,name</b></p>
+      <textarea id="dataInput">bh12 4bz,blue,John Smith&#10;BH12 4LL,black&#10;BH1 1AA</textarea>
       <button class="plot-btn" onclick="plotMap()">Plot on Map</button>
     </div>
     
   </div>
 
   <script>
-    // 1. Initialize the map
     const map = L.map('map').setView([50.73, -1.98], 11);
     
-    // 2. Load the OpenStreetMap tiles
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
       attribution: '© OpenStreetMap'
     }).addTo(map);
 
-    // Custom Mobile-Friendly Fullscreen Button
     const fullscreenControl = L.control({ position: 'topleft' });
     fullscreenControl.onAdd = function() {
       const btn = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
@@ -138,17 +131,23 @@
         if (!line) continue;
         
         const parts = line.split(',');
-        if (parts.length >= 2) {
+        
+        // UPDATED: Now only requires at least 1 part (the postcode)
+        if (parts.length >= 1 && parts[0].trim() !== '') {
           const postcode = parts[0].trim();
-          const color = parts[1].trim();
-          const name = parts[2] ? parts[2].trim() : 'No Name';
+          
+          // If no colour is provided, default to 'red'
+          const color = parts[1] ? parts[1].trim() : 'red';
+          
+          // If no name is provided, leave it blank
+          const name = parts[2] ? parts[2].trim() : null;
           
           dataPoints.push({ postcode, color, name });
           postcodesToLookup.push(postcode);
         }
       }
 
-      if (postcodesToLookup.length === 0) return alert('No valid data found! Ensure format is postcode,colour,name');
+      if (postcodesToLookup.length === 0) return alert('No valid data found!');
 
       try {
         const response = await fetch('https://api.postcodes.io/postcodes', {
@@ -179,12 +178,15 @@
                 fillOpacity: 1
               }).addTo(markers);
 
-              marker.bindTooltip(match.name, {
-                permanent: true,       
-                direction: 'right',    
-                offset: [5, 0],        
-                className: 'custom-label' 
-              });
+              // UPDATED: Only attach a label if a name actually exists
+              if (match.name) {
+                marker.bindTooltip(match.name, {
+                  permanent: true,       
+                  direction: 'right',    
+                  offset: [5, 0],        
+                  className: 'custom-label' 
+                });
+              }
 
               validCount++;
             }
