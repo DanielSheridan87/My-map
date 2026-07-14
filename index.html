@@ -75,7 +75,7 @@
     <div id="map"></div>
     
     <div id="input-area">
-      <p class="help-text">Paste data line by line.<br>Formats accepted: <b>postcode</b> OR <b>postcode,colour</b> OR <b>postcode,colour,name</b></p>
+      <p class="help-text">Paste data line by line. Supports hundreds of postcodes.<br>Formats accepted: <b>postcode</b> OR <b>postcode,colour</b> OR <b>postcode,colour,name</b></p>
       <textarea id="dataInput">bh12 4bz,blue,Test&#10;BH12 4LL,black&#10;BH1 1AA</textarea>
       <button class="plot-btn" onclick="plotMap()">Plot on Map</button>
     </div>
@@ -132,14 +132,9 @@
         
         const parts = line.split(',');
         
-        // UPDATED: Now only requires at least 1 part (the postcode)
         if (parts.length >= 1 && parts[0].trim() !== '') {
           const postcode = parts[0].trim();
-          
-          // If no colour is provided, default to 'red'
           const color = parts[1] ? parts[1].trim() : 'red';
-          
-          // If no name is provided, leave it blank
           const name = parts[2] ? parts[2].trim() : null;
           
           dataPoints.push({ postcode, color, name });
@@ -150,48 +145,54 @@
       if (postcodesToLookup.length === 0) return alert('No valid data found!');
 
       try {
-        const response = await fetch('https://api.postcodes.io/postcodes', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ postcodes: postcodesToLookup })
-        });
-        const apiData = await response.json();
-
         let validCount = 0;
+        const chunkSize = 100;
 
-        apiData.result.forEach(item => {
-          if (item.result) { 
-            const lat = item.result.latitude;
-            const lng = item.result.longitude;
-            const queryPc = item.query;
+        // NEW CHUNKING LOOP: Slices the big list into batches of 100
+        for (let i = 0; i < postcodesToLookup.length; i += chunkSize) {
+          const chunk = postcodesToLookup.slice(i, i + chunkSize);
 
-            const match = dataPoints.find(dp => 
-              dp.postcode.replace(/\s+/g, '').toLowerCase() === queryPc.replace(/\s+/g, '').toLowerCase()
-            );
+          const response = await fetch('https://api.postcodes.io/postcodes', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ postcodes: chunk })
+          });
+          const apiData = await response.json();
 
-            if (match) {
-              const marker = L.circleMarker([lat, lng], {
-                radius: 6,
-                fillColor: match.color,
-                color: '#000', 
-                weight: 1.5,   
-                fillOpacity: 1
-              }).addTo(markers);
+          if (apiData.result) {
+            apiData.result.forEach(item => {
+              if (item.result) { 
+                const lat = item.result.latitude;
+                const lng = item.result.longitude;
+                const queryPc = item.query;
 
-              // UPDATED: Only attach a label if a name actually exists
-              if (match.name) {
-                marker.bindTooltip(match.name, {
-                  permanent: true,       
-                  direction: 'right',    
-                  offset: [5, 0],        
-                  className: 'custom-label' 
-                });
+                const match = dataPoints.find(dp => 
+                  dp.postcode.replace(/\s+/g, '').toLowerCase() === queryPc.replace(/\s+/g, '').toLowerCase()
+                );
+
+                if (match) {
+                  const marker = L.circleMarker([lat, lng], {
+                    radius: 6,
+                    fillColor: match.color,
+                    color: '#000', 
+                    weight: 1.5,   
+                    fillOpacity: 1
+                  }).addTo(markers);
+
+                  if (match.name) {
+                    marker.bindTooltip(match.name, {
+                      permanent: true,       
+                      direction: 'right',    
+                      offset: [5, 0],        
+                      className: 'custom-label' 
+                    });
+                  }
+                  validCount++;
+                }
               }
-
-              validCount++;
-            }
+            });
           }
-        });
+        } // End of chunking loop
 
         if (validCount > 0) {
           const group = new L.featureGroup(markers.getLayers());
