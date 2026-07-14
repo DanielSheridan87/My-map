@@ -2,28 +2,37 @@
 <html>
 <head>
   <title>Postcode Route Mapper</title>
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  
-  <link rel="stylesheet" href="https://unpkg.com/leaflet.fullscreen@3.1.4/Control.FullScreen.css" />
-  <script src="https://unpkg.com/leaflet.fullscreen@3.1.4/Control.FullScreen.js"></script>
   
   <style>
     body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f9; }
     h2 { margin-top: 0; }
-    #container { display: flex; gap: 20px; flex-wrap: wrap; }
-    #input-area { width: 100%; max-width: 300px; }
+    
+    /* Changed container to stack items vertically */
+    #container { display: flex; flex-direction: column; gap: 20px; }
+    
+    /* Map now takes up 100% of the width */
+    #map { width: 100%; height: 600px; border: 2px solid #ccc; border-radius: 4px; z-index: 1; }
+    
+    /* Input area sits below and spans the full width */
+    #input-area { width: 100%; }
+    
     textarea { 
       width: 100%; 
-      height: 400px; 
+      height: 300px; /* Slightly shorter to fit on the screen nicely */
       padding: 10px; 
       font-family: monospace; 
       border: 1px solid #ccc; 
       border-radius: 4px;
+      box-sizing: border-box; /* Stops padding from pushing the box off the screen */
     }
-    button { 
+    button.plot-btn { 
       width: 100%; 
-      padding: 10px; 
+      padding: 15px; 
       margin-top: 10px; 
       background-color: #007bff; 
       color: white; 
@@ -31,12 +40,12 @@
       border-radius: 4px; 
       cursor: pointer; 
       font-weight: bold;
+      font-size: 16px;
     }
-    button:hover { background-color: #0056b3; }
-    #map { height: 600px; flex-grow: 1; min-width: 400px; border: 2px solid #ccc; border-radius: 4px; z-index: 1; }
+    button.plot-btn:hover { background-color: #0056b3; }
+    
     .help-text { font-size: 0.9em; color: #555; }
     
-    /* Slight styling to make the always-on label look clean */
     .custom-label {
       background: rgba(255, 255, 255, 0.9);
       border: 1px solid #999;
@@ -44,32 +53,75 @@
       font-size: 12px;
       padding: 4px 6px;
     }
+
+    /* CSS Full-Screen Trick */
+    .fullscreen-map-mode {
+      position: fixed !important;
+      top: 0 !important;
+      left: 0 !important;
+      width: 100vw !important;
+      height: 100vh !important;
+      margin: 0 !important;
+      border: none !important;
+      border-radius: 0 !important;
+      z-index: 9999 !important;
+    }
+    body.no-scroll {
+      overflow: hidden;
+    }
   </style>
 </head>
 <body>
 
   <h2>Custom Postcode Mapper</h2>
   <div id="container">
+    
+    <div id="map"></div>
+    
     <div id="input-area">
       <p class="help-text">Paste postcodes, colours, and names line by line.<br>Format: <b>postcode,colour,name</b></p>
       <textarea id="dataInput">bh12 4bz,blue,John Smith&#10;BH12 4LL,black,Jane Doe&#10;BH1 1AA,red,Morning Route</textarea>
-      <button onclick="plotMap()">Plot on Map</button>
+      <button class="plot-btn" onclick="plotMap()">Plot on Map</button>
     </div>
-    <div id="map"></div>
+    
   </div>
 
   <script>
-    // 1. Initialize the map with fullscreen enabled
-    const map = L.map('map', {
-      fullscreenControl: true,
-      fullscreenControlOptions: { position: 'topleft' }
-    }).setView([50.73, -1.98], 11);
+    // 1. Initialize the map
+    const map = L.map('map').setView([50.73, -1.98], 11);
     
-    // 2. Load the free OpenStreetMap tiles
+    // 2. Load the OpenStreetMap tiles
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
       attribution: '© OpenStreetMap'
     }).addTo(map);
+
+    // Custom Mobile-Friendly Fullscreen Button
+    const fullscreenControl = L.control({ position: 'topleft' });
+    fullscreenControl.onAdd = function() {
+      const btn = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
+      btn.innerHTML = '<a href="#" title="Toggle Fullscreen" style="font-size:18px; text-decoration:none; color:black; display:block; width:30px; height:30px; line-height:30px; text-align:center; background-color:white;">⛶</a>';
+      
+      btn.onclick = function(e) {
+        e.preventDefault(); 
+        const mapDiv = document.getElementById('map');
+        const body = document.body;
+        const icon = btn.querySelector('a');
+
+        mapDiv.classList.toggle('fullscreen-map-mode');
+        body.classList.toggle('no-scroll');
+
+        if (mapDiv.classList.contains('fullscreen-map-mode')) {
+          icon.innerHTML = '✖';
+        } else {
+          icon.innerHTML = '⛶';
+        }
+
+        setTimeout(() => { map.invalidateSize(); }, 200);
+      };
+      return btn;
+    };
+    fullscreenControl.addTo(map);
 
     let markers = L.layerGroup().addTo(map);
 
@@ -81,7 +133,6 @@
       const dataPoints = [];
       const postcodesToLookup = [];
 
-      // 3. Read the text box
       for (let line of lines) {
         line = line.trim();
         if (!line) continue;
@@ -99,7 +150,6 @@
 
       if (postcodesToLookup.length === 0) return alert('No valid data found! Ensure format is postcode,colour,name');
 
-      // 4. Send bulk request to Postcodes.io
       try {
         const response = await fetch('https://api.postcodes.io/postcodes', {
           method: 'POST',
@@ -110,7 +160,6 @@
 
         let validCount = 0;
 
-        // 5. Match coordinates and plot the pins with permanent labels
         apiData.result.forEach(item => {
           if (item.result) { 
             const lat = item.result.latitude;
@@ -130,7 +179,6 @@
                 fillOpacity: 1
               }).addTo(markers);
 
-              // TOOLTIP UPDATED: Only the raw name variable is passed
               marker.bindTooltip(match.name, {
                 permanent: true,       
                 direction: 'right',    
@@ -143,7 +191,6 @@
           }
         });
 
-        // 6. Adjust the map zoom
         if (validCount > 0) {
           const group = new L.featureGroup(markers.getLayers());
           map.fitBounds(group.getBounds().pad(0.1));
