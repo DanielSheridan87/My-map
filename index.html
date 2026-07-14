@@ -130,8 +130,8 @@
                 fillOpacity: 1
               }).addTo(markers);
 
-              // TOOLTIP UPDATED: Removed the <br> and postcode section
-              marker.bindTooltip(`<b>${match.name}</b>`, {
+              // TOOLTIP UPDATED: Only the raw name variable is passed
+              marker.bindTooltip(match.name, {
                 permanent: true,       
                 direction: 'right',    
                 offset: [5, 0],        
