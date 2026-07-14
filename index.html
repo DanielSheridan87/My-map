@@ -5,6 +5,9 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.fullscreen@3.1.4/Control.FullScreen.css" />
+  <script src="https://unpkg.com/leaflet.fullscreen@3.1.4/Control.FullScreen.js"></script>
+  
   <style>
     body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f9; }
     h2 { margin-top: 0; }
@@ -30,7 +33,8 @@
       font-weight: bold;
     }
     button:hover { background-color: #0056b3; }
-    #map { height: 600px; flex-grow: 1; min-width: 400px; border: 2px solid #ccc; border-radius: 4px; }
+    /* z-index ensures the map stays on top when full screen is triggered */
+    #map { height: 600px; flex-grow: 1; min-width: 400px; border: 2px solid #ccc; border-radius: 4px; z-index: 1; }
     .help-text { font-size: 0.9em; color: #555; }
   </style>
 </head>
@@ -39,16 +43,19 @@
   <h2>Custom Postcode Mapper</h2>
   <div id="container">
     <div id="input-area">
-      <p class="help-text">Paste postcodes and colours line by line.<br>Format: <b>postcode,colour</b></p>
-      <textarea id="dataInput">bh12 4bz,blue&#10;BH12 4LL,black&#10;BH1 1AA,red</textarea>
+      <p class="help-text">Paste postcodes, colours, and names line by line.<br>Format: <b>postcode,colour,name</b></p>
+      <textarea id="dataInput">bh12 4bz,blue,John Smith&#10;BH12 4LL,black,Jane Doe&#10;BH1 1AA,red,Morning Route</textarea>
       <button onclick="plotMap()">Plot on Map</button>
     </div>
     <div id="map"></div>
   </div>
 
   <script>
-    // 1. Initialize the map (starts centered near Poole/Bournemouth)
-    const map = L.map('map').setView([50.73, -1.98], 11);
+    // 1. Initialize the map WITH the fullscreen control enabled
+    const map = L.map('map', {
+      fullscreenControl: true,
+      fullscreenControlOptions: { position: 'topleft' }
+    }).setView([50.73, -1.98], 11);
     
     // 2. Load the free OpenStreetMap tiles
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -56,18 +63,17 @@
       attribution: '© OpenStreetMap'
     }).addTo(map);
 
-    // Create a layer group to hold our pins so we can easily clear them
     let markers = L.layerGroup().addTo(map);
 
     async function plotMap() {
-      markers.clearLayers(); // Clear map on new button click
+      markers.clearLayers(); 
       
       const rawText = document.getElementById('dataInput').value;
       const lines = rawText.split('\n');
       const dataPoints = [];
       const postcodesToLookup = [];
 
-      // 3. Read the text box line by line
+      // 3. Read the text box expecting up to 3 parts (postcode, colour, name)
       for (let line of lines) {
         line = line.trim();
         if (!line) continue;
@@ -76,12 +82,16 @@
         if (parts.length >= 2) {
           const postcode = parts[0].trim();
           const color = parts[1].trim();
-          dataPoints.push({ postcode, color });
+          
+          // If a name is provided, grab it. Otherwise, say "No Name provided"
+          const name = parts[2] ? parts[2].trim() : 'No Name provided';
+          
+          dataPoints.push({ postcode, color, name });
           postcodesToLookup.push(postcode);
         }
       }
 
-      if (postcodesToLookup.length === 0) return alert('No valid data found! Ensure format is postcode,colour');
+      if (postcodesToLookup.length === 0) return alert('No valid data found! Ensure format is postcode,colour,name');
 
       // 4. Send bulk request to Postcodes.io
       try {
@@ -94,33 +104,32 @@
 
         let validCount = 0;
 
-        // 5. Match the API coordinates back to your custom colours
+        // 5. Match coordinates to custom colours and names
         apiData.result.forEach(item => {
-          if (item.result) { // If postcode is valid
+          if (item.result) { 
             const lat = item.result.latitude;
             const lng = item.result.longitude;
             const queryPc = item.query;
 
-            // Find the colour assigned to this postcode (ignoring spaces and capitals)
             const match = dataPoints.find(dp => 
               dp.postcode.replace(/\s+/g, '').toLowerCase() === queryPc.replace(/\s+/g, '').toLowerCase()
             );
 
             if (match) {
-              // Plot a coloured circle marker
+              // Plot marker with the new popup format showing Name on top, Postcode underneath
               L.circleMarker([lat, lng], {
                 radius: 10,
                 fillColor: match.color,
-                color: '#000', // Black outline
+                color: '#000', 
                 weight: 2,
                 fillOpacity: 1
-              }).bindPopup(`<b>${item.result.postcode}</b>`).addTo(markers);
+              }).bindPopup(`<b>${match.name}</b><br>${item.result.postcode}`).addTo(markers);
               validCount++;
             }
           }
         });
 
-        // 6. Adjust the map zoom to fit all the new pins perfectly
+        // 6. Adjust the map zoom
         if (validCount > 0) {
           const group = new L.featureGroup(markers.getLayers());
           map.fitBounds(group.getBounds().pad(0.1));
